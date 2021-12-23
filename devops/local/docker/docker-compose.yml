@@ -1,0 +1,125 @@
+version: "3.8"
+services:
+  mongo:
+    image: geppettotest/mongo-local:sept2021
+    container_name: mongo-3749
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password
+    volumes:
+      - userproject_3749-volume:/data/db
+    ports:
+      - "27018:27017"
+    healthcheck:
+      test: echo 'db.runCommand({serverStatus:1}).ok' | mongo admin -u root -p root --quiet | grep 1
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+  vault:
+    image: vault
+    container_name: vault-3749
+    ports:
+      - "8200:8200"
+    environment:
+        VAULT_SERVER: "http://127.0.0.1:8200"
+        VAULT_DEV_ROOT_TOKEN_ID: vault-geppetto-2021
+    cap_add:
+      - IPC_LOCK
+
+  camunda:
+    image: geppettodistribution/camunda-local:Jan2021
+    container_name: camunda-3749
+    ports:
+      - "0000:8080"
+
+  authproxy:
+    build: ../../../application/services/default_services/authproxy
+    image: authproxy-3749
+    container_name: authproxy-3749
+    ports:
+      - "0000:8001"
+    env_file: .env
+    depends_on:
+      - mongo
+      - gcam
+      - camunda
+
+  securitymanager:
+    build: ../../../application/services/default_services/securitymanager
+    image: securitymanager-3749
+    container_name: securitymanager-3749
+    ports:
+      - "8003:8003"
+    env_file: .env
+    depends_on:
+      - mongo
+      - camunda
+
+  systemcredentialmanager:
+    build: ../../../application/services/default_services/systemcredentialmanager
+    image: systemcredentialmanager-3749
+    container_name: systemcredentialmanager-3749
+    ports:
+      - "8005:8005"
+    env_file: .env
+    depends_on:
+      - mongo
+      - vault
+
+  camundaservice:
+    build: ../../../application/services/default_services/camunda
+    image: camundaservice-3749
+    container_name: camundasvc-3749
+    ports:
+      - "8002:8002"
+    env_file: .env
+    depends_on:
+      - mongo
+      - camunda
+      - securitymanager
+
+  gcam:
+    build: ../../../application/services/default_services/gcam
+    image: gcam-3749
+    container_name: gcam-3749
+    ports:
+      - "8007:8007"
+    env_file: .env
+    depends_on:
+      - mongo
+      - vault
+     
+     
+  apigateway:
+    build: ../../../application/services/custom_services/apigateway
+    image: apigateway-3749
+    container_name: apigateway-3749
+    ports:
+      - "8000:8000"
+    env_file: .env
+    depends_on:
+      - camunda
+      - camundaservice
+      - authproxy
+      - securitymanager
+      - systemcredentialmanager
+      - systementry
+
+
+
+  systementry: 
+    build: ../../../application/services/custom_services/systementry
+    image: systementry-3749
+    container_name: systementry-3749
+    ports: 
+      - 8008:8008
+    env_file: .env
+    depends_on:
+      - mongo
+
+
+volumes:
+  userproject_3749-volume:
+    driver: local
